@@ -20,6 +20,7 @@ groupBot = proc event@(_time, evt) -> do
   onlineFriends <- perBlip resolvePk . emitJusts friendOnlineEvent -< evt
   inviteMsgs <- parseFriendEventCmd "invite" parseInviteArgs -< event
   masterInviteConfs <- filterB isInviteEvent . masterEvents -< event
+  friendRequests <- emitOn isFriendRequestEvent -< event
 
   let queryAutoInvites :: ((Friend, BS.ByteString), a) -> ((Friend, Bool), a)
       queryAutoInvites ((friend, pk), x) = ((friend, M.findWithDefault False pk autoInvites), x)
@@ -28,8 +29,9 @@ groupBot = proc event@(_time, evt) -> do
   foCmds <- fromBlips (Commands []) . modifyBlips doFriendOnline -< queryAutoInvites <$> onlineFriends
   iCmds <- fromBlips (Commands []) . modifyBlips doInvite -< inviteMsgs
   micCmds <- fromBlips (Commands []) . modifyBlips doMasterJoin -< masterInviteConfs
+  frCmds <- fromBlips (Commands []) . modifyBlips doFriendAdd -< friendRequests
 
-  id -< mconcat [aiCmds, foCmds, iCmds, micCmds]
+  id -< mconcat [aiCmds, foCmds, iCmds, micCmds, frCmds]
   where
     parseAutoInviteArgs ["on"]    = Just $ Just True
     parseAutoInviteArgs ["On"]    = Just $ Just True
@@ -62,6 +64,9 @@ groupBot = proc event@(_time, evt) -> do
     isInviteEvent (_, EvtConferenceInvite _ _ _) = True
     isInviteEvent _                              = False
 
+    isFriendRequestEvent (_, EvtFriendRequest _ _) = True
+    isFriendRequestEvent _                         = False
+
     doAutoInviteCmds ((friend, _), Just True) =
       Commands [CmdFriendSendMessage friend MessageTypeNormal "Auto-invite turned on"]
     doAutoInviteCmds ((friend, _), Just False) =
@@ -79,6 +84,11 @@ groupBot = proc event@(_time, evt) -> do
     doMasterJoin (_, EvtConferenceInvite friend ConferenceTypeText cookie) =
       Commands [CmdConferenceJoin friend cookie]
     doMasterJoin _ =
+      Commands []
+  
+    doFriendAdd (_, EvtFriendRequest addr _) =
+      Commands [CmdFriendAddNorequest addr]
+    doFriendAdd _ =
       Commands []
     
                                 
