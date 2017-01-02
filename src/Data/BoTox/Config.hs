@@ -22,7 +22,11 @@ toxSavedataFilename = "botox.tox"
 
 masterKeys :: [BS.ByteString]
 masterKeys = map (fst . Base16.decode . fromString) $
-             [ "040F75B5C8995F9525F9A8692A6C355286BBD3CF248C984560733421274F0365" ]
+             [ "040F75B5C8995F9525F9A8692A6C355286BBD3CF248C984560733421274F0365",
+               "FFE3B2073F02285C159FB1D338A247853A725FC74573951C7EF8BE4898671C57" ]
 
 isMaster :: BS.ByteString -> Bool
 isMaster key = elem key masterKeys
+  
+botName :: String
+botName = "Нургл"

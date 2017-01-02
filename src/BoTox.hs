@@ -5,6 +5,7 @@ module BoTox where
 import           BoTox.Callbacks
 import           BoTox.Commands
 import           BoTox.Types
+import           BoTox.Bots (bots)
 import qualified Data.BoTox.Config as Cfg
 
 import           Prelude hiding ((.), id)
@@ -58,6 +59,9 @@ runTox opts bot = must $ withOptions opts $
       addr <- toxSelfGetAddress tox
       putStrLn $ BS.unpack $ Base16.encode addr
       _ <- toxBootstrap tox Cfg.toxBootstrapAddress Cfg.toxBootstrapPort Cfg.toxBootstrapKey
+      _ <- toxSelfSetName tox Cfg.botName
+      savedata <- toxGetSavedata tox
+      BS.writeFile Cfg.toxSavedataFilename savedata
       runToxBotApp (runBot bot) tox
 
 runBot :: ToxBot (ToxBotApp ToxData) -> ToxBotApp ToxData ()
@@ -87,11 +91,15 @@ stepTox tox = do
   threadDelay $ fromIntegral $ interval * 10000
   takeMVar td
               
+
+chatBot :: ToxBot (ToxBotApp t)
+chatBot = mconcat bots
+  
                      
 runBoTox :: IO ()
 runBoTox = do
   savedata <- readToxSavedata Cfg.toxSavedataFilename
-  runTox (toxOptions savedata) echoBot
+  runTox (toxOptions savedata) chatBot
 
 
 perGroup :: Monad m => GroupBot m -> ToxBot m
@@ -112,12 +120,3 @@ perGroup gb = proc evts -> do
       GroupCommands gcmds <- gbot -< evt
       let cmds = map (toCmd conf) gcmds
       id -< Commands cmds
-
-
-echoBot :: Monad a => ToxBot a
-echoBot = proc (_time, event) ->
-  id -< Commands (doEvent event)
-  where
-    doEvent (EvtFriendRequest addr _msg) = [CmdFriendAddNorequest addr]
-    doEvent (EvtFriendMessage friend msgType msg) = [CmdFriendSendMessage friend msgType msg] 
-    doEvent _ = []

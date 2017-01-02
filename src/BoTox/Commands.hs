@@ -1,7 +1,9 @@
 module BoTox.Commands where
 
-import BoTox.Types
-import Network.Tox.C
+import           BoTox.Types
+import qualified Data.BoTox.Config as Cfg
+import qualified Data.ByteString.Char8 as BS
+import           Network.Tox.C
 
 runCommand :: Tox a -> Command -> IO ()
 runCommand tox (CmdSelfSetStatus status) = do
@@ -10,26 +12,38 @@ runCommand tox (CmdSelfSetStatus status) = do
                                            
 runCommand tox (CmdSelfSetStatusMessage statusMessage) = do
   _ <- toxSelfSetStatusMessage tox statusMessage
+  savedata <- toxGetSavedata tox
+  BS.writeFile Cfg.toxSavedataFilename savedata
   return ()
 
 runCommand tox (CmdSelfSetNospam nospam) = do
   _ <- toxSelfSetNospam tox (fromIntegral nospam)
+  savedata <- toxGetSavedata tox
+  BS.writeFile Cfg.toxSavedataFilename savedata
   return ()
 
 runCommand tox (CmdSelfSetName name) = do
   _ <- toxSelfSetName tox name
+  savedata <- toxGetSavedata tox
+  BS.writeFile Cfg.toxSavedataFilename savedata
   return ()
 
 runCommand tox (CmdFriendDelete (Friend fn)) = do
   _ <- toxFriendDelete tox (fromIntegral fn)
+  savedata <- toxGetSavedata tox
+  BS.writeFile Cfg.toxSavedataFilename savedata
   return ()
 
 runCommand tox (CmdFriendAdd addr msg ) = do
   _ <- toxFriendAdd tox addr msg
+  savedata <- toxGetSavedata tox
+  BS.writeFile Cfg.toxSavedataFilename savedata
   return ()
 
 runCommand tox (CmdFriendAddNorequest addr ) = do
   _ <- toxFriendAddNorequest tox addr
+  savedata <- toxGetSavedata tox
+  BS.writeFile Cfg.toxSavedataFilename savedata
   return ()
 
 runCommand tox (CmdFriendSendMessage (Friend fn) msgType msg) = do
