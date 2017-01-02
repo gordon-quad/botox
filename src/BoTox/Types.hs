@@ -1,4 +1,4 @@
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving, Arrows #-}
 
 module BoTox.Types where
 
@@ -10,6 +10,7 @@ import Network.Tox.C.Tox (UserStatus(..), MessageType(..),
                           ConferenceType(..))
 import Network.Tox.C.Type (Tox)
 import System.Posix.Types (EpochTime)
+import Prelude hiding ((.), id)
 
 newtype Friend = Friend Int
   deriving (Eq, Show, Read)
@@ -89,3 +90,22 @@ newtype ToxBotApp t a = ToxBotA { runA :: ReaderT (Tox t) IO a }
 runToxBotApp :: ToxBotApp t a -> Tox t -> IO a
 runToxBotApp a tox = runReaderT (runA a) tox
 
+
+perGroup :: Monad m => GroupBot m -> ToxBot m
+perGroup gb = proc evts -> do
+  gevtBlips <- emitJusts confMsg -< evts
+  cmdBlips <- perBlip (confMap gb) -< gevtBlips
+  cmds <- fromBlips (Commands []) -< cmdBlips
+  id -< cmds
+  where
+    confMsg (time, evt) = case evt of
+                            EvtConferenceMessage cnf _ msgType msg -> 
+                              Just (cnf, (time, EvtGroupMessage msgType msg))
+                            _ -> Nothing
+
+    toCmd conf (CmdGroupMessage msgType msg) = CmdConferenceSendMessage conf msgType msg
+
+    confMap gbot = proc (conf, evt) -> do
+      GroupCommands gcmds <- gbot -< evt
+      let cmds = map (toCmd conf) gcmds
+      id -< Commands cmds

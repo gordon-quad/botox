@@ -100,23 +100,3 @@ runBoTox :: IO ()
 runBoTox = do
   savedata <- readToxSavedata Cfg.toxSavedataFilename
   runTox (toxOptions savedata) chatBot
-
-
-perGroup :: Monad m => GroupBot m -> ToxBot m
-perGroup gb = proc evts -> do
-  gevtBlips <- emitJusts confMsg -< evts
-  cmdBlips <- perBlip (confMap gb) -< gevtBlips
-  cmds <- fromBlips (Commands []) -< cmdBlips
-  id -< cmds
-  where
-    confMsg (time, evt) = case evt of
-                            EvtConferenceMessage cnf _ msgType msg -> 
-                              Just (cnf, (time, EvtGroupMessage msgType msg))
-                            _ -> Nothing
-
-    toCmd conf (CmdGroupMessage msgType msg) = CmdConferenceSendMessage conf msgType msg
-
-    confMap gbot = proc (conf, evt) -> do
-      GroupCommands gcmds <- gbot -< evt
-      let cmds = map (toCmd conf) gcmds
-      id -< Commands cmds
