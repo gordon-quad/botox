@@ -10,7 +10,7 @@ import           Control.Monad.Reader
 import           Network.Tox.C
 import           Prelude hiding ((.), id)
 
-parseCmd :: Monad m => String -> ([String] -> Maybe b) -> Auto m (a, String) (Blip (a, b))
+parseCmd :: String -> ([String] -> Maybe b) -> Auto m (a, String) (Blip (a, b))
 parseCmd cmd parseArgs = emitJusts (getRequest cmd parseArgs . (\(x, y) -> (x, words y)))
 
 getRequest :: String -> ([String] -> Maybe b) -> (a, [String]) -> Maybe (a, b)

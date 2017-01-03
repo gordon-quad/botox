@@ -23,6 +23,7 @@ library
                      , BoTox.Bots
                      , BoTox.Bots.Utils
                      , BoTox.Bots.GroupBot
+                     , BoTox.Bots.RollBot
                      , BoTox.Bots.TitleBot
                      , Data.BoTox.Config
 
@@ -43,6 +44,8 @@ library
                      , wreq
                      , mtl
                      , lens
+                     , MissingH
+                     , random
 
   default-language:    Haskell2010
 
