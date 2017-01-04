@@ -3,25 +3,32 @@ module BoTox.Bots.RollBot where
 
 import BoTox.Bots.Utils
 import BoTox.Types
+import BoTox.Utils.DiceParser
+
 import Control.Auto
 import Control.Auto.Effects
-import Control.Monad.IO.Class
-import Data.List
 import Control.Monad
+import Control.Monad.IO.Class
 import Data.Function (on)
+import Data.List
 import Data.String.Utils (strip, split)
 import Network.Tox.C
 import Prelude hiding ((.), id)
-import System.Random (randomRIO)
+import System.Random (randomRIO, newStdGen)
 
 rollBot :: MonadIO m => GroupBot m
 rollBot = proc event -> do
   infaCmds <- parseGroupBotCmd "%инфа" parseInfaArgs -< event
   doCmds <- parseGroupBotCmd "%зделоть" parseDoArgs -< event
+  diceCmds <- parseGroupBotCmd "%d" parseDiceArgs -< event
   outInfaCmds <- fromBlips (GroupCommands []) . arrMB (liftIO . doInfa) -< infaCmds
   outDoCmds <- fromBlips (GroupCommands []) . arrMB (liftIO . doDo) -< doCmds
-  id -< mconcat [outInfaCmds, outDoCmds]
+  outDiceCmds <- fromBlips (GroupCommands []) . arrMB (liftIO . doDice) -< diceCmds
+  id -< mconcat [outInfaCmds, outDoCmds, outDiceCmds]
   where
+    parseDiceArgs [] = Nothing
+    parseDiceArgs smth = Just (unwords smth)
+
     parseInfaArgs [] = Nothing
     parseInfaArgs smth = Just (unwords smth)
 
@@ -42,3 +49,12 @@ rollBot = proc event -> do
       rinfa <- randomRIO (0,146) :: IO Integer
       let outstr = str ++ " - инфа " ++ show rinfa ++ "%"
       return $ GroupCommands [CmdGroupMessage MessageTypeNormal outstr]
+
+    doDice str =
+      case parseDice str of
+        Left err -> return $ GroupCommands [CmdGroupMessage MessageTypeNormal (show err)]
+        Right expr -> do
+          gen <- newStdGen
+          let (s, _) = evalDiceStr expr gen
+          let (val, _) = evalDice expr gen
+          return $ GroupCommands [CmdGroupMessage MessageTypeNormal (s ++ " = " ++ show val)]

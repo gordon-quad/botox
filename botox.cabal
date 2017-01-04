@@ -20,6 +20,7 @@ library
   other-modules:       BoTox.Types
                      , BoTox.Callbacks
                      , BoTox.Commands
+                     , BoTox.Utils.DiceParser
                      , BoTox.Bots
                      , BoTox.Bots.Utils
                      , BoTox.Bots.GroupBot
@@ -46,6 +47,7 @@ library
                      , lens
                      , MissingH
                      , random
+                     , parsec
 
   default-language:    Haskell2010
 
