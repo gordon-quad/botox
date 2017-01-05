@@ -18,7 +18,6 @@ library
   GHC-Options:         -Wall
 
   other-modules:       BoTox.Types
-                     , BoTox.Callbacks
                      , BoTox.Commands
                      , BoTox.Utils.DiceParser
                      , BoTox.Bots

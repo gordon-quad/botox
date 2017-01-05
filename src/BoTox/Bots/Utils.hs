@@ -42,7 +42,7 @@ parseGroupBotCmd cmd parseArgs = proc (_time, (EvtGroupMessage _ msg)) -> do
   cmds <- modifyBlips snd . parseCmd cmd parseArgs -< ((), msg)
   id -< cmds
   
-masterEvents :: Auto (ToxBotApp t) Event (Blip Event)
+masterEvents :: MonadTB m => Auto m Event (Blip Event)
 masterEvents = proc event -> do
   outEvents <- onJusts . arrM checkIsMaster -< event
   id -< outEvents
@@ -55,10 +55,10 @@ masterEvents = proc event -> do
     checkIsMaster evt@(_, EvtConferenceInvite f _ _)     = checkMasterFriend f evt
     checkIsMaster _                                      = return Nothing
 
-    checkMasterFriend :: Friend -> Event -> ToxBotApp t (Maybe Event)
+    checkMasterFriend :: MonadTB m => Friend -> Event -> m (Maybe Event)
     checkMasterFriend (Friend fn) evt = do
-      tox <- ask
-      pk <- liftIO $ toxFriendGetPublicKey tox (fromIntegral fn)
+      t <- getTox
+      pk <- liftIO $ toxFriendGetPublicKey t (fromIntegral fn)
       case pk of
         Left _ -> return Nothing
         Right key -> return $ if Cfg.isMaster key

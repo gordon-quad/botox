@@ -5,7 +5,7 @@ import qualified Data.BoTox.Config as Cfg
 import qualified Data.ByteString.Char8 as BS
 import           Network.Tox.C
 
-runCommand :: Tox a -> Command -> IO ()
+runCommand :: ToxState -> Command -> IO ()
 runCommand tox (CmdSelfSetStatus status) = do
   _ <- toxSelfSetStatus tox status
   return ()

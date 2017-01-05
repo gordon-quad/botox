@@ -7,7 +7,7 @@ import BoTox.Bots.GroupBot
 import BoTox.Bots.TitleBot
 import BoTox.Bots.RollBot
 
-bots :: [ToxBot (ToxBotApp t)]
+bots :: MonadTB m => [ToxBot m]
 bots = [ serializing' "groups.db" groupBot
        , perGroup titleBot
        , perGroup rollBot ]

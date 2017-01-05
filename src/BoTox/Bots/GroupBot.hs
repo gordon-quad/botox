@@ -13,7 +13,7 @@ import           Network.Tox.C
 import           Prelude hiding ((.), id)
 import           Text.Read (readMaybe)
 
-groupBot :: ToxBot (ToxBotApp t)
+groupBot :: MonadTB m => ToxBot m
 groupBot = proc event@(_time, evt) -> do
   autoInviteMsgs <- perBlip resolvePk . parseFriendEventCmd "autoinvite" parseAutoInviteArgs -< event
   autoInvites <- updateAutoInvites -< autoInviteMsgs
@@ -92,17 +92,16 @@ groupBot = proc event@(_time, evt) -> do
       Commands []
     
                                 
-resolvePk :: Auto (ToxBotApp t) (Friend, a) ((Friend, BS.ByteString), a)
+resolvePk :: MonadTB m => Auto m (Friend, a) ((Friend, BS.ByteString), a)
 resolvePk = proc (friend, args) -> do
   pk <- arrM getPk -< friend
   id -< ((friend, pk), args)
   where
     getFriendNum (Friend num) = fromIntegral num
 
-    getPk :: Friend -> ToxBotApp t (BS.ByteString)
     getPk friend = do
-      tox <- ask
-      pk <- liftIO $ toxFriendGetPublicKey tox (getFriendNum friend)
+      t <- getTox
+      pk <- liftIO $ toxFriendGetPublicKey t (getFriendNum friend)
       case pk of
         Left _err -> return BS.empty
         Right key -> return key

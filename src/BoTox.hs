@@ -2,7 +2,6 @@
 
 module BoTox where
 
-import           BoTox.Callbacks
 import           BoTox.Commands
 import           BoTox.Types
 import           BoTox.Bots (bots)
@@ -51,7 +50,7 @@ readToxSavedata f = catch (BS.readFile f) handler
     handler :: IOException -> IO BS.ByteString
     handler _e = return BS.empty
 
-runTox :: Options -> ToxBot (ToxBotApp ToxData) -> IO ()
+runTox :: Options -> ToxBot ToxBotApp -> IO ()
 runTox opts bot = must $ withOptions opts $
   \optsPtr ->
     must $ withTox optsPtr $
@@ -62,20 +61,20 @@ runTox opts bot = must $ withOptions opts $
       _ <- toxSelfSetName tox Cfg.botName
       savedata <- toxGetSavedata tox
       BS.writeFile Cfg.toxSavedataFilename savedata
-      runToxBotApp (runBot bot) tox
+      runToxBotApp (runBot bot) (ToxBotRState tox)
 
-runBot :: ToxBot (ToxBotApp ToxData) -> ToxBotApp ToxData ()
+runBot :: MonadTB m => ToxBot m -> m ()
 runBot bot = do
   time <- liftIO epochTime
-  tox <- ask
+  tox <- getTox
   (Commands cmds, bot') <- stepAuto bot (time, EvtStartup)
   liftIO $ mapM_ (runCommand tox) cmds
   loop bot'
                                          
 
-loop :: ToxBot (ToxBotApp ToxData) -> ToxBotApp ToxData ()
+loop :: MonadTB m => ToxBot m -> m ()
 loop bot = do
-  tox <- ask
+  tox <- getTox
   ToxData events <- liftIO $ stepTox tox
   (cmds, bot') <- overList bot events
   let Commands cmds' = mconcat cmds
@@ -92,7 +91,7 @@ stepTox tox = do
   takeMVar td
               
 
-chatBot :: ToxBot (ToxBotApp t)
+chatBot :: MonadTB m => ToxBot m
 chatBot = mconcat bots
   
                      
