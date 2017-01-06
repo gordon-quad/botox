@@ -121,8 +121,7 @@ type Title = String
 type Name = String
 type Nospam = Int
 
-data EventType = EvtStartup
-               | EvtSelfConnectionStatus      Connection
+data EventType = EvtSelfConnectionStatus      Connection
                | EvtFriendName                Friend Name
                | EvtFriendStatusMessage       Friend StatusMessage
                | EvtFriendStatus              Friend UserStatus

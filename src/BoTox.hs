@@ -9,6 +9,7 @@ import qualified Data.BoTox.Config as Cfg
 
 import           Prelude hiding ((.), id)
 import           Control.Auto
+import           Control.Monad.Loops
 import           Control.Auto.Run
 import           Control.Exception
 import           Network.Tox.C
@@ -17,7 +18,6 @@ import qualified Data.ByteString.Base16 as Base16
 import           Control.Concurrent.MVar
 import           Control.Concurrent
 import           Control.Monad.Reader
-import           System.Posix.Time (epochTime)
 
 toxOptions :: BS.ByteString -> Options
 toxOptions savedata = Options
@@ -61,25 +61,17 @@ runTox opts bot = must $ withOptions opts $
       _ <- toxSelfSetName tox Cfg.botName
       savedata <- toxGetSavedata tox
       BS.writeFile Cfg.toxSavedataFilename savedata
-      runToxBotApp (runBot bot) (ToxBotRState tox)
+      runToxBotApp (iterateM_ runBot bot) (ToxBotRState tox)
 
-runBot :: MonadTB m => ToxBot m -> m ()
+
+runBot :: MonadTB m => ToxBot m -> m (ToxBot m)
 runBot bot = do
-  time <- liftIO epochTime
-  tox <- getTox
-  (Commands cmds, bot') <- stepAuto bot (time, EvtStartup)
-  liftIO $ mapM_ (runCommand tox) cmds
-  loop bot'
-                                         
-
-loop :: MonadTB m => ToxBot m -> m ()
-loop bot = do
   tox <- getTox
   ToxData events <- liftIO $ stepTox tox
   (cmds, bot') <- overList bot events
   let Commands cmds' = mconcat cmds
   liftIO $ mapM_ (runCommand tox) cmds'
-  loop bot'
+  return bot'
              
 
 stepTox :: Tox ToxData -> IO ToxData
