@@ -2,7 +2,7 @@
 module BoTox.Bots.TitleBot where
 
 import           BoTox.Types
-import           BoTox.Bots.Utils
+import           BoTox.Utils
 
 import           Control.Auto
 import           Control.Auto.Blip

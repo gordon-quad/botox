@@ -8,7 +8,6 @@ import           BoTox.Bots (bots)
 import qualified Data.BoTox.Config as Cfg
 
 import           Prelude hiding ((.), id)
-import           Control.Auto
 import           Control.Monad.Loops
 import           Control.Auto.Run
 import           Control.Exception

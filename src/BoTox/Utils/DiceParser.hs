@@ -1,15 +1,20 @@
 {-# LANGUAGE NoMonomorphismRestriction, FlexibleContexts #-}
 
-module BoTox.Utils.DiceParser (Expr(..), parseDice, evalDice, evalDiceStr) where
+module BoTox.Utils.DiceParser ( Expr(..)
+                              , parseDice
+                              , evalDice
+                              , evalDiceStr
+                              , diceParser) where
 
 import Control.Applicative ((<$>), (<*), (*>), (<|>))
 import Control.Monad (foldM, liftM2, liftM)
 import Control.Monad.State (State, get, put, runState, replicateM)
 import System.Random (Random, StdGen, randomR)
-import Text.Parsec (many1, digit, spaces, char, parse, try, Stream(..), ParsecT, ParseError, eof)
+import Text.Parsec (many1, digit, char, parse, try, Stream(..), ParsecT, ParseError, eof)
 import Text.Parsec.Char (oneOf, string)
 import Text.Parsec.Expr (Assoc(..), Operator(..), buildExpressionParser)
 import Data.List (intercalate)
+import BoTox.Utils
 
 -- Randomness setup for dice roll --
 
@@ -66,10 +71,6 @@ roll (UDice s) = getRandomR (-s, s)
 
 -- Parsers --
 
--- A parser that modifies the argument parser to accept whitespace after it
-spaced :: Stream s m Char => ParsecT s u m a -> ParsecT s u m a
-spaced = (<* spaces)
-
 -- A parser to parse the integer literals
 literal :: Stream s m Char => ParsecT s u m Expr
 literal = (Lit . read) <$> spaced (many1 digit)
@@ -90,7 +91,7 @@ dice = (flip Rol . read) <$> spaced (many1 digit) <*> die
 -- A parse to parse a factor, where a factor is either a literal or
 -- a factor preceded by an unary operator or an expression enclosed in brackets
 factor :: Stream s m Char => ParsecT s u m Expr
-factor  = spaced (char '(') *> spaced expr <* spaced (char ')')
+factor  = spaced (char '(') *> spaced diceParser <* spaced (char ')')
           <|> try dice
           <|> literal
 
@@ -101,11 +102,11 @@ table = [[bop '*' Mul AssocLeft, bop '/' Div AssocLeft],    -- multiplication an
   where bop c f = Infix (spaced (char c) *> return f)       -- binary operators
 
 -- | A parser to parse the dice roll expression
-expr :: Stream s m Char => ParsecT s u m Expr
-expr = buildExpressionParser table factor
+diceParser :: Stream s m Char => ParsecT s u m Expr
+diceParser = buildExpressionParser table factor
 
 parseDice :: String -> Either ParseError Expr
-parseDice s = parse (expr <* eof) "DiceRollParser" s
+parseDice s = parse (diceParser <* eof) "DiceRollParser" s
 
 evalDice :: Expr -> StdGen -> (Int, StdGen)
 evalDice e g = runState (eval e) g
