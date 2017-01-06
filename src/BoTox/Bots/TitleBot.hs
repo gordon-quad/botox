@@ -14,7 +14,7 @@ import qualified Data.List as L
 import qualified Data.String as S
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
-import           Network.HTTP.Client (defaultManagerSettings, managerResponseTimeout, HttpException(..))
+import           Network.HTTP.Client (HttpException(..))
 import           Network.Tox.C
 import           Network.Wreq
 import Prelude hiding           ((.), id)
@@ -73,11 +73,14 @@ extractTitle url = do
                            (x:_) -> x
                            []    -> Nothing
       if  Prelude.foldr (||) False $ fmap (tagOpenNameLit "title") parsed
-      then case maybeResult of
-             Just result ->  return $ TE.decodeUtf8 $ LB.toStrict result -- To do: handle web pages that don't use UTF8
+      then case maybeResult of 
+             Just result ->  return . mapError . TE.decodeUtf8' $ LB.toStrict result -- To do: handle web pages that don't use UTF8
              Nothing     -> return "Could not fetch a title for that URL."
       else return errorText
     Left ex -> return $ T.pack $ "Fetching page title failed due to " ++ ex
+  where
+    mapError (Right title) = title
+    mapError (Left _)      = "2017 год на дворе блядь а эта обоссаная страничка не может в UTF8"
 
 
 getWebPage :: String -- | Url

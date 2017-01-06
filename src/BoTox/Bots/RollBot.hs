@@ -11,29 +11,22 @@ import Control.Monad
 import Control.Monad.IO.Class
 import Data.Function (on)
 import Data.List
-import Data.String.Utils (strip, split)
+import Data.String.Utils (split)
 import Network.Tox.C
 import Prelude hiding ((.), id)
 import System.Random (randomRIO, newStdGen)
 
 rollBot :: MonadIO m => GroupBot m
 rollBot = proc event -> do
-  infaCmds <- parseGroupBotCmd "%инфа" parseInfaArgs -< event
-  doCmds <- parseGroupBotCmd "%зделоть" parseDoArgs -< event
-  diceCmds <- parseGroupBotCmd "%d" parseDiceArgs -< event
+  infaCmds <- parseGroupBotCmd ["%инфа", "%info"] id -< event
+  doCmds <- parseGroupBotCmd ["%зделоть","%делать"] parseDoArgs -< event
+  diceCmds <- parseGroupBotCmd ["%d","%dice","%к"] id -< event
   outInfaCmds <- fromBlips (GroupCommands []) . arrMB (liftIO . doInfa) -< infaCmds
   outDoCmds <- fromBlips (GroupCommands []) . arrMB (liftIO . doDo) -< doCmds
   outDiceCmds <- fromBlips (GroupCommands []) . arrMB (liftIO . doDice) -< diceCmds
   id -< mconcat [outInfaCmds, outDoCmds, outDiceCmds]
   where
-    parseDiceArgs [] = Nothing
-    parseDiceArgs smth = Just (unwords smth)
-
-    parseInfaArgs [] = Nothing
-    parseInfaArgs smth = Just (unwords smth)
-
-    parseDoArgs [] = Nothing
-    parseDoArgs smth = Just (map strip $ split "," (unwords smth))
+    parseDoArgs smth = split "," smth
 
     doDo strs = do
       vals <- liftIO $ forM strs $ \x -> (randomRIO (0,1000) :: IO Integer) >>= return . (,) x

@@ -15,10 +15,10 @@ import           Text.Read (readMaybe)
 
 groupBot :: MonadTB m => ToxBot m
 groupBot = proc event@(_time, evt) -> do
-  autoInviteMsgs <- perBlip resolvePk . parseFriendEventCmd "autoinvite" parseAutoInviteArgs -< event
+  autoInviteMsgs <- perBlip resolvePk . parseFriendEventCmd ["autoinvite"] parseAutoInviteArgs -< event
   autoInvites <- updateAutoInvites -< autoInviteMsgs
   onlineFriends <- perBlip resolvePk . emitJusts friendOnlineEvent -< evt
-  inviteMsgs <- parseFriendEventCmd "invite" parseInviteArgs -< event
+  inviteMsgs <- parseFriendEventCmd ["invite"] parseInviteArgs -< event
   masterInviteConfs <- filterB isInviteEvent . masterEvents -< event
   friendRequests <- emitOn isFriendRequestEvent -< event
 
@@ -33,24 +33,22 @@ groupBot = proc event@(_time, evt) -> do
 
   id -< mconcat [aiCmds, foCmds, iCmds, micCmds, frCmds]
   where
-    parseAutoInviteArgs ["on"]    = Just $ Just True
-    parseAutoInviteArgs ["On"]    = Just $ Just True
-    parseAutoInviteArgs ["yes"]   = Just $ Just True
-    parseAutoInviteArgs ["Yes"]   = Just $ Just True
-    parseAutoInviteArgs ["true"]  = Just $ Just True
-    parseAutoInviteArgs ["True"]  = Just $ Just True
-    parseAutoInviteArgs ["off"]    = Just $ Just False
-    parseAutoInviteArgs ["Off"]    = Just $ Just False
-    parseAutoInviteArgs ["no"]    = Just $ Just False
-    parseAutoInviteArgs ["No"]    = Just $ Just False
-    parseAutoInviteArgs ["false"] = Just $ Just False
-    parseAutoInviteArgs ["False"] = Just $ Just False
-    parseAutoInviteArgs []        = Just $ Nothing
-    parseAutoInviteArgs _         = Nothing
+    parseAutoInviteArgs "on"    = Just True
+    parseAutoInviteArgs "On"    = Just True
+    parseAutoInviteArgs "yes"   = Just True
+    parseAutoInviteArgs "Yes"   = Just True
+    parseAutoInviteArgs "true"  = Just True
+    parseAutoInviteArgs "True"  = Just True
+    parseAutoInviteArgs "off"   = Just False
+    parseAutoInviteArgs "Off"   = Just False
+    parseAutoInviteArgs "no"    = Just False
+    parseAutoInviteArgs "No"    = Just False
+    parseAutoInviteArgs "false" = Just False
+    parseAutoInviteArgs "False" = Just False
+    parseAutoInviteArgs _       = Nothing
 
-    parseInviteArgs [a] = readMaybe a
-    parseInviteArgs []  = Just 0
-    parseInviteArgs _   = Nothing
+    parseInviteArgs "" = Just 0
+    parseInviteArgs a  = readMaybe a
 
     updateAutoInvites = scanB upd M.empty
 
@@ -79,7 +77,8 @@ groupBot = proc event@(_time, evt) -> do
     doFriendOnline ((_, False), _) =
         Commands []
 
-    doInvite (friend, confNum) = Commands [CmdConferenceInvite friend (Conference confNum)]
+    doInvite (friend, Just confNum) = Commands [CmdConferenceInvite friend (Conference confNum)]
+    doInvite (_, Nothing)           = Commands []
 
     doMasterJoin (_, EvtConferenceInvite friend ConferenceTypeText cookie) =
       Commands [CmdConferenceJoin friend cookie]

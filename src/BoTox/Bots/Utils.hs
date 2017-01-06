@@ -4,48 +4,44 @@ module BoTox.Bots.Utils where
 import           BoTox.Types
 import qualified Data.BoTox.Config as Cfg
 
+import           Control.Arrow
 import           Control.Auto
 import           Control.Auto.Blip
 import           Control.Monad.Reader
+import           Data.Maybe
+import           Data.List
+import           Data.String.Utils
 import           Network.Tox.C
 import           Prelude hiding ((.), id)
 
-parseCmd :: String -> ([String] -> Maybe b) -> Auto m (a, String) (Blip (a, b))
-parseCmd cmd parseArgs = emitJusts (getRequest cmd parseArgs . (\(x, y) -> (x, words y)))
+parseCmd :: [String] -> (String -> a) -> Auto m (d, String) (Blip (d, a))
+parseCmd cmds parseArgs = emitJusts (getRequest . args)
+  where
+    getRequest (x, (a:_)) = Just $ (x, parseArgs (strip a))
+    getRequest (_, []) = Nothing
+    args (x, str) = (x, mapMaybe ((flip stripPrefix) str) cmds)
 
-getRequest :: String -> ([String] -> Maybe b) -> (a, [String]) -> Maybe (a, b)
-getRequest cmdPrefix parseArgs (x, (cmd : args)) 
-  | cmdPrefix == cmd = do
-      parsed <- parseArgs args
-      return (x, parsed)
-  | otherwise        = Nothing
-getRequest _ _ _     = Nothing
-
-parseGroupEventCmd :: Monad m => String -> ([String] -> Maybe b) -> Auto m Event (Blip (Conference, b))
-parseGroupEventCmd cmd parseArgs = proc (_time, evt) -> do
-  cmds <- joinB . perBlip (parseCmd cmd parseArgs) . emitJusts filterGroupMsgs -< evt
-  id -< cmds
+parseGroupEventCmd :: Monad m => [String] -> (String -> a) -> Auto m Event (Blip (Conference, a))
+parseGroupEventCmd cmdPrefixes parseArgs =
+  arr snd >>> emitJusts filterGroupMsgs >>> perBlip (parseCmd cmdPrefixes parseArgs) >>> joinB
   where
     filterGroupMsgs (EvtConferenceMessage conf _ MessageTypeNormal msg) = Just (conf, msg)
     filterGroupMsgs _                                                   = Nothing
 
-parseFriendEventCmd :: Monad m => String -> ([String] -> Maybe b) -> Auto m Event (Blip (Friend, b))
-parseFriendEventCmd cmd parseArgs = proc (_time, evt) -> do
-  cmds <- joinB . perBlip (parseCmd cmd parseArgs) . emitJusts filterGroupMsgs -< evt
-  id -< cmds
+parseFriendEventCmd :: Monad m => [String] -> (String -> a) -> Auto m Event (Blip (Friend, a))
+parseFriendEventCmd cmdPrefixes parseArgs =
+  arr snd >>> emitJusts filterFriendMsgs >>> perBlip (parseCmd cmdPrefixes parseArgs) >>> joinB
   where
-    filterGroupMsgs (EvtFriendMessage friend MessageTypeNormal msg) = Just (friend, msg)
-    filterGroupMsgs _                                               = Nothing
+    filterFriendMsgs (EvtFriendMessage friend MessageTypeNormal msg) = Just (friend, msg)
+    filterFriendMsgs _                                               = Nothing
 
-parseGroupBotCmd :: Monad m => String -> ([String] -> Maybe b) -> Auto m GroupEvent (Blip b)
-parseGroupBotCmd cmd parseArgs = proc (_time, (EvtGroupMessage _ msg)) -> do
-  cmds <- modifyBlips snd . parseCmd cmd parseArgs -< ((), msg)
-  id -< cmds
-  
+parseGroupBotCmd :: Monad m => [String] -> (String -> b) -> Auto m GroupEvent (Blip b)
+parseGroupBotCmd cmdPrefixes parseArgs = proc (_time, (EvtGroupMessage _ msg)) -> do
+  modifyBlips snd . parseCmd cmdPrefixes parseArgs -< ((), msg)
+
+
 masterEvents :: MonadTB m => Auto m Event (Blip Event)
-masterEvents = proc event -> do
-  outEvents <- onJusts . arrM checkIsMaster -< event
-  id -< outEvents
+masterEvents = arrM checkIsMaster >>> onJusts
   where
     checkIsMaster evt@(_, EvtFriendName f _)             = checkMasterFriend f evt
     checkIsMaster evt@(_, EvtFriendStatusMessage f _)    = checkMasterFriend f evt
@@ -57,8 +53,8 @@ masterEvents = proc event -> do
 
     checkMasterFriend :: MonadTB m => Friend -> Event -> m (Maybe Event)
     checkMasterFriend (Friend fn) evt = do
-      t <- getTox
-      pk <- liftIO $ toxFriendGetPublicKey t (fromIntegral fn)
+      tox <- getTox
+      pk <- liftIO $ toxFriendGetPublicKey tox (fromIntegral fn)
       case pk of
         Left _ -> return Nothing
         Right key -> return $ if Cfg.isMaster key
