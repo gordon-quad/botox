@@ -2,6 +2,7 @@
 module BoTox.Bots.TitleBot where
 
 import           BoTox.Types
+import           BoTox.Bots.Utils
 
 import           Control.Auto
 import           Control.Auto.Blip
@@ -15,7 +16,6 @@ import qualified Data.String as S
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import           Network.HTTP.Client (HttpException(..))
-import           Network.Tox.C
 import           Network.Wreq
 import Prelude hiding           ((.), id)
 import           Text.HTML.TagSoup
@@ -29,7 +29,7 @@ titleBot = proc (_time, EvtGroupMessage _ msg) -> do
 
   result <- arrMB (liftIO . getTitle) -< blipMsg
 
-  cmds <- fromBlips (GroupCommands []) . modifyBlips (\x -> GroupCommands [CmdGroupMessage MessageTypeNormal x]) -< result
+  cmds <- fromBlips mempty . modifyBlips groupBotSay -< result
 
   id -< cmds
 

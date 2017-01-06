@@ -25,11 +25,11 @@ groupBot = proc event@(_time, evt) -> do
   let queryAutoInvites :: ((Friend, BS.ByteString), a) -> ((Friend, Bool), a)
       queryAutoInvites ((friend, pk), x) = ((friend, M.findWithDefault False pk autoInvites), x)
   
-  aiCmds <- fromBlips (Commands []) . modifyBlips doAutoInviteCmds -< queryAutoInvites <$> autoInviteMsgs
-  foCmds <- fromBlips (Commands []) . modifyBlips doFriendOnline -< queryAutoInvites <$> onlineFriends
-  iCmds <- fromBlips (Commands []) . modifyBlips doInvite -< inviteMsgs
-  micCmds <- fromBlips (Commands []) . modifyBlips doMasterJoin -< masterInviteConfs
-  frCmds <- fromBlips (Commands []) . modifyBlips doFriendAdd -< friendRequests
+  aiCmds <- fromBlips mempty . modifyBlips doAutoInviteCmds -< queryAutoInvites <$> autoInviteMsgs
+  foCmds <- fromBlips mempty . modifyBlips doFriendOnline -< queryAutoInvites <$> onlineFriends
+  iCmds <- fromBlips mempty . modifyBlips doInvite -< inviteMsgs
+  micCmds <- fromBlips mempty . modifyBlips doMasterJoin -< masterInviteConfs
+  frCmds <- fromBlips mempty . modifyBlips doFriendAdd -< friendRequests
 
   id -< mconcat [aiCmds, foCmds, iCmds, micCmds, frCmds]
   where
@@ -66,11 +66,11 @@ groupBot = proc event@(_time, evt) -> do
     isFriendRequestEvent _                         = False
 
     doAutoInviteCmds ((friend, _), Just True) =
-      Commands [CmdFriendSendMessage friend MessageTypeNormal "Auto-invite turned on"]
+      botFriendSay friend "Auto-invite turned on"
     doAutoInviteCmds ((friend, _), Just False) =
-      Commands [CmdFriendSendMessage friend MessageTypeNormal "Auto-invite turned off"]
+      botFriendSay friend "Auto-invite turned off"
     doAutoInviteCmds ((friend, autoInvite), Nothing) =
-      Commands [CmdFriendSendMessage friend MessageTypeNormal ("Auto-invite is " ++ (show autoInvite)) ]
+      botFriendSay friend ("Auto-invite is " ++ (show autoInvite))
 
     doFriendOnline ((friend, True), _) =
         Commands [CmdConferenceInvite friend (Conference 0)]

@@ -12,7 +12,6 @@ import Control.Monad.IO.Class
 import Data.Function (on)
 import Data.List
 import Data.String.Utils (split)
-import Network.Tox.C
 import Prelude hiding ((.), id)
 import System.Random (randomRIO, newStdGen)
 
@@ -33,21 +32,20 @@ rollBot = proc event -> do
       let v = sortVs vals
       let s = sum . snd . unzip $ v
       let outstr = intercalate "\n" $ map (\(ss,x) -> ss ++ " - " ++ show (x * 100 `div` s) ++ "%") v
-      return $ GroupCommands [CmdGroupMessage MessageTypeNormal outstr]
+      return $ groupBotSay outstr
 
     sortVs :: [(String, Integer)] -> [(String, Integer)]
     sortVs = sortBy (flip compare `on` snd)
 
     doInfa str = do
       rinfa <- randomRIO (0,146) :: IO Integer
-      let outstr = str ++ " - инфа " ++ show rinfa ++ "%"
-      return $ GroupCommands [CmdGroupMessage MessageTypeNormal outstr]
+      return $ groupBotSay $ str ++ " - инфа " ++ show rinfa ++ "%"
 
     doDice str =
       case parseDice str of
-        Left err -> return $ GroupCommands [CmdGroupMessage MessageTypeNormal (show err)]
+        Left err -> return $ groupBotSay (show err)
         Right expr -> do
           gen <- newStdGen
           let (s, _) = evalDiceStr expr gen
           let (val, _) = evalDice expr gen
-          return $ GroupCommands [CmdGroupMessage MessageTypeNormal (s ++ " = " ++ show val)]
+          return $ groupBotSay (s ++ " = " ++ show val)

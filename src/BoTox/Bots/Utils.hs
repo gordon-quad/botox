@@ -60,3 +60,12 @@ masterEvents = arrM checkIsMaster >>> onJusts
         Right key -> return $ if Cfg.isMaster key
                               then (Just evt)
                               else Nothing
+
+groupBotSay :: String -> GroupCommands
+groupBotSay s = GroupCommands [CmdGroupMessage MessageTypeNormal s]
+
+botFriendSay :: Friend -> String -> Commands
+botFriendSay f s = Commands [CmdFriendSendMessage f MessageTypeNormal s]
+
+botConferenceSay :: Conference -> String -> Commands
+botConferenceSay c s = Commands [CmdConferenceSendMessage c MessageTypeNormal s]
