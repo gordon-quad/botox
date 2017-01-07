@@ -16,7 +16,14 @@ import qualified Data.ByteString.Char8 as BS
 import           Data.Maybe
 import           Network.Tox.C
 import           Prelude hiding ((.), id)
+import           System.Log.Formatter
+import           System.Log.Handler hiding (setLevel)
+import           System.Log.Handler.Simple
+import           System.Log.Logger
 import           System.Random
+
+comp :: String
+comp = "BoTox"
 
 toxOptions :: BS.ByteString -> Options
 toxOptions savedata = Options
@@ -53,14 +60,19 @@ runTox :: ToxBot ToxBotApp -> IO ()
 runTox bot = do
   maybeCfg <- readConfig
   let cfg = fromMaybe (error "Cannot read config") maybeCfg
+  logFileHandler <- fileHandler (logFile cfg) (logLevel cfg)
+  let logFileHandler' = setFormatter logFileHandler (simpleLogFormatter $ logFormat cfg)
+  updateGlobalLogger comp (setLevel $ logLevel cfg)
+  updateGlobalLogger comp (setHandlers [logFileHandler'])
+  infoM comp "Bot is starting up"
   savedata <- readToxSavedata (toxSavedataFilename cfg)
   must $ withOptions (toxOptions savedata) $ \optsPtr ->
     must $ withTox optsPtr $
     \tox -> withCHandler tox $ do
       bootstrapNode <- liftM (bootstrapNodes cfg !! ) $ randomRIO (0, (length $ bootstrapNodes cfg) - 1)
       addr <- toxSelfGetAddress tox
-      putStrLn $ BS.unpack $ Base16.encode addr
-      _ <- toxBootstrap tox (bootstrapAddress bootstrapNode) (fromIntegral $ bootstrapPort bootstrapNode) (toxKeyFromString $ bootstrapPublicKey bootstrapNode)
+      infoM comp (("Bot address is " ++) $ BS.unpack $ Base16.encode addr)
+      _ <- toxBootstrap tox (bootstrapAddress bootstrapNode) (fromIntegral $ bootstrapPort bootstrapNode) (bootstrapPublicKey bootstrapNode)
       _ <- toxSelfSetName tox (botName cfg)
       sd <- toxGetSavedata tox
       BS.writeFile (toxSavedataFilename cfg) sd

@@ -1,15 +1,20 @@
 {-# LANGUAGE Arrows #-}
 module BoTox.Bots.GroupBot where
 
-import           BoTox.Types
-import           BoTox.Utils
+import BoTox.Types
+import BoTox.Utils
 
-import           Control.Auto
-import           Control.Auto.Blip
-import           Data.Map as M
-import           Network.Tox.C
-import           Prelude hiding ((.), id)
-import           Text.Parsec
+import Control.Auto
+import Control.Auto.Blip
+import Control.Monad.IO.Class
+import Data.Map as M
+import Network.Tox.C
+import Prelude hiding ((.), id)
+import System.Log.Logger
+import Text.Parsec
+
+comp :: String
+comp = "BoTox.GroupBot"
 
 groupBot :: MonadTB m => ToxBot m
 groupBot = proc event@(_time, evt) -> do
@@ -18,6 +23,9 @@ groupBot = proc event@(_time, evt) -> do
   inviteMsgs <- parseFriendEventCmd ["invite"] inviteArgsParser -< event
   masterInviteConfs <- filterB isInviteEvent . masterEvents -< event
   friendRequests <- emitOn isFriendRequestEvent -< event
+
+  arrM (liftIO . logOnline) -< evt
+  arrM (liftIO . logOffline) -< evt
 
   autoInvites <- updateAutoInvites -< autoInviteMsgs
 
@@ -77,4 +85,12 @@ groupBot = proc event@(_time, evt) -> do
       Commands [CmdFriendAddNorequest addr]
     doFriendAdd _ =
       mempty
+
+    logOnline (EvtSelfConnectionStatus ConnectionNone) = return ()
+    logOnline (EvtSelfConnectionStatus _) = infoM comp "Tox online"
+    logOnline _ = return ()
+
+    logOffline (EvtSelfConnectionStatus ConnectionNone) = infoM comp "Tox offline"
+    logOffline (EvtSelfConnectionStatus _) = return ()
+    logOffline _ = return ()
  

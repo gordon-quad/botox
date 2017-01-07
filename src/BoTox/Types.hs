@@ -53,6 +53,7 @@ import           Network.Tox.C.Callbacks
 import           Network.Tox.C.Tox
 import           Network.Tox.C.Type (Tox)
 import           Prelude hiding ((.), id)
+import           System.Log.Logger
 import           System.Posix.Time (epochTime)
 import           System.Posix.Types (EpochTime)
 
@@ -276,7 +277,7 @@ perGroup gb = proc evts -> do
 
 data BootstrapNode = BootstrapNode { bootstrapAddress :: String
                                    , bootstrapPort :: Int
-                                   , bootstrapPublicKey :: String }
+                                   , bootstrapPublicKey :: ToxPublicKey }
                      deriving (Show, Generic)
 
 instance FromJSON BootstrapNode where
@@ -284,29 +285,35 @@ instance FromJSON BootstrapNode where
     BootstrapNode <$>
     v .: "bootstrap-address" <*>
     v .: "bootstrap-port" <*>
-    v .: "bootstrap-public-key"
+    (toxKeyFromString <$> v .: "bootstrap-public-key")
   parseJSON _ = fail "Expected Object for BootstrapNode value"
 
 data Config = Config { botName :: Name
-                     , masterKeys :: [String]
+                     , masterKeys :: [ToxPublicKey]
                      , bootstrapNodes :: [BootstrapNode]
-                     , toxSavedataFilename :: String }
+                     , toxSavedataFilename :: String
+                     , logFile :: FilePath
+                     , logLevel :: Priority
+                     , logFormat :: String}
               deriving (Show, Generic)
 
 instance FromJSON Config where
   parseJSON (Object v) =
     Config <$>
     v .: "bot-name" <*>
-    v .: "master-keys" <*>
+    (map toxKeyFromString <$> v .: "master-keys") <*>
     v .: "bootstrap-nodes" <*>
-    v .: "tox-savedata-filename"
+    v .: "tox-savedata-filename" <*>
+    v .: "log-file" <*>
+    (read <$> v .: "log-level") <*>
+    v .: "log-format"
   parseJSON _ = fail "Expected Object for Config value"
 
 readConfig :: IO (Maybe Config)
 readConfig = decodeFile "config.yaml"
 
 isMaster :: Config -> BS.ByteString -> Bool
-isMaster cfg key = elem key $ map toxKeyFromString (masterKeys cfg)
+isMaster cfg key = elem key (masterKeys cfg)
 
 toxKeyFromString :: String -> BS.ByteString
 toxKeyFromString = fst . Base16.decode . fromString
