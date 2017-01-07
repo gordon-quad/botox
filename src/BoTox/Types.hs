@@ -1,4 +1,9 @@
-{-# LANGUAGE GeneralizedNewtypeDeriving, Arrows, FlexibleContexts #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE Arrows #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE QuasiQuotes #-}
 
 module BoTox.Types ( Friend(..)
                    , Conference(..)
@@ -18,113 +23,125 @@ module BoTox.Types ( Friend(..)
                    , GroupCommand (..)
                    , Commands (..)
                    , GroupCommands (..) 
-                   , ToxBotRState (..) 
+                   , ToxBotRState (..)
                    , ToxBotApp (..)
                    , MonadTB (..)
                    , ToxData (..)
                    , ToxState
                    , ToxBot
                    , GroupBot
+                   , BootstrapNode (..)
+                   , Config (..)
+                   , readConfig
                    , runToxBotApp
                    , perGroup
+                   , isMaster
+                   , toxKeyFromString
                    ) where
 
-import Control.Auto
-import Control.Monad.Reader
-import Data.ByteString (ByteString)
-import Data.Either.Extra
-import Network.Tox.C.Callbacks
-import Network.Tox.C.Tox
-import Network.Tox.C.Type (Tox)
-import Prelude hiding ((.), id)
-import System.Posix.Time (epochTime)
-import System.Posix.Types (EpochTime)
+import           Control.Auto
+import           Control.Monad.Reader
+import           Data.Aeson
+import qualified Data.ByteString as BS
+import qualified Data.ByteString.Base16 as Base16
+import           Data.Either.Extra
+import           Data.Maybe
+import           Data.String
+import           Data.Yaml
+import           GHC.Generics
+import           Network.Tox.C.Callbacks
+import           Network.Tox.C.Tox
+import           Network.Tox.C.Type (Tox)
+import           Prelude hiding ((.), id)
+import           System.Posix.Time (epochTime)
+import           System.Posix.Types (EpochTime)
 
   
-newtype ToxData = ToxData [Event]
-  deriving (Eq, Show)
+data ToxData = ToxData [Event] Config
+  deriving (Show)
 
 zipMaybe :: (Maybe a, Maybe b) -> Maybe (a, b)
 zipMaybe (a, b) = (,) <$> a <*> b
   
   
 instance CHandler ToxData where
-  cSelfConnectionStatus _tox conn (ToxData events) = do
+  cSelfConnectionStatus _tox conn (ToxData events cfg) = do
     time <- epochTime
-    return $ ToxData ((time, EvtSelfConnectionStatus conn) : events)
+    return $ ToxData ((time, EvtSelfConnectionStatus conn) : events) cfg
     
-  cFriendName tox fn name td@(ToxData events) = do
+  cFriendName tox fn name td@(ToxData events cfg) = do
     time <- epochTime
-    friend <- fillFriend tox (fromIntegral fn)
-    return $ maybe td (\f -> ToxData ((time, EvtFriendName f name) : events)) friend
+    friend <- fillFriend tox cfg (fromIntegral fn)
+    return $ maybe td (\f -> ToxData ((time, EvtFriendName f name) : events) cfg) friend
     
-  cFriendStatusMessage tox fn statusMessage td@(ToxData events) = do
+  cFriendStatusMessage tox fn statusMessage td@(ToxData events cfg) = do
     time <- epochTime
-    friend <- fillFriend tox (fromIntegral fn)
-    return $ maybe td (\f -> ToxData ((time, EvtFriendStatusMessage f statusMessage) : events)) friend
+    friend <- fillFriend tox cfg (fromIntegral fn)
+    return $ maybe td (\f -> ToxData ((time, EvtFriendStatusMessage f statusMessage) : events) cfg) friend
   
-  cFriendStatus tox fn status td@(ToxData events) = do
+  cFriendStatus tox fn status td@(ToxData events cfg) = do
     time <- epochTime
-    friend <- fillFriend tox (fromIntegral fn)
-    return $ maybe td (\f -> ToxData ((time, EvtFriendStatus f status) : events)) friend
+    friend <- fillFriend tox cfg (fromIntegral fn)
+    return $ maybe td (\f -> ToxData ((time, EvtFriendStatus f status) : events) cfg) friend
   
-  cFriendConnectionStatus tox fn status td@(ToxData events) = do
+  cFriendConnectionStatus tox fn status td@(ToxData events cfg) = do
     time <- epochTime
-    friend <- fillFriend tox (fromIntegral fn)
-    return $ maybe td (\f -> ToxData ((time, EvtFriendConnectionStatus f status) : events)) friend
+    friend <- fillFriend tox cfg (fromIntegral fn)
+    return $ maybe td (\f -> ToxData ((time, EvtFriendConnectionStatus f status) : events) cfg) friend
   
-  cFriendRequest _tox addr msg (ToxData events) = do
+  cFriendRequest _tox addr msg (ToxData events cfg) = do
     time <- epochTime
-    return $ ToxData ((time, EvtFriendRequest addr msg) : events)
+    return $ ToxData ((time, EvtFriendRequest addr msg) : events) cfg
   
-  cFriendMessage tox fn msgType msg td@(ToxData events) = do
+  cFriendMessage tox fn msgType msg td@(ToxData events cfg) = do
     time <- epochTime
-    friend <- fillFriend tox (fromIntegral fn)
-    return $ maybe td (\f -> ToxData ((time, EvtFriendMessage f msgType msg) : events)) friend
+    friend <- fillFriend tox cfg (fromIntegral fn)
+    return $ maybe td (\f -> ToxData ((time, EvtFriendMessage f msgType msg) : events) cfg) friend
   
-  cConferenceInvite tox fn confType cookie td@(ToxData events) = do
+  cConferenceInvite tox fn confType cookie td@(ToxData events cfg) = do
     time <- epochTime
-    friend <- fillFriend tox (fromIntegral fn)
-    return $ maybe td (\f -> ToxData ((time, EvtConferenceInvite f confType cookie) : events)) friend
+    friend <- fillFriend tox cfg (fromIntegral fn)
+    return $ maybe td (\f -> ToxData ((time, EvtConferenceInvite f confType cookie) : events) cfg) friend
   
-  cConferenceMessage tox cn pn msgType msg td@(ToxData events) = do
+  cConferenceMessage tox cn pn msgType msg td@(ToxData events cfg) = do
     time <- epochTime
     conf <- fillConference tox (fromIntegral cn)
     peer <- fillPeer tox (fromIntegral cn) (fromIntegral pn)
-    return $ maybe td (\(c, p) -> ToxData ((time, EvtConferenceMessage c p msgType msg) : events)) $ zipMaybe (conf,peer)
+    return $ maybe td (\(c, p) -> ToxData ((time, EvtConferenceMessage c p msgType msg) : events) cfg) $ zipMaybe (conf,peer)
   
-  cConferenceTitle tox cn pn title td@(ToxData events) = do
+  cConferenceTitle tox cn pn title td@(ToxData events cfg) = do
     time <- epochTime
     conf <- fillConference tox (fromIntegral cn)
     peer <- fillPeer tox (fromIntegral cn) (fromIntegral pn)
-    return $ maybe td (\(c, p) -> ToxData ((time, EvtConferenceTitle c p title) : events)) $ zipMaybe (conf,peer)
+    return $ maybe td (\(c, p) -> ToxData ((time, EvtConferenceTitle c p title) : events) cfg) $ zipMaybe (conf,peer)
   
-  cConferenceNamelistChange tox cn _pn _change td@(ToxData events) = do
+  cConferenceNamelistChange tox cn _pn _change td@(ToxData events cfg) = do
     time <- epochTime
     conf <- fillConference tox (fromIntegral cn)
     peerCount <- (liftM eitherToMaybe) $ toxConferencePeerCount tox (fromIntegral cn)
     peers <- case peerCount of
                Nothing -> return Nothing
                Just pc -> (liftM sequence) $ resolvePeers [1..(fromIntegral pc)]
-    return $ maybe td (\(c, p) -> ToxData ((time, EvtConferenceNamelistChange c p) : events)) $ zipMaybe (conf,peers)
+    return $ maybe td (\(c, p) -> ToxData ((time, EvtConferenceNamelistChange c p) : events) cfg) $ zipMaybe (conf,peers)
     where
       resolvePeers = mapM (fillPeer tox (fromIntegral cn))
 
 
-fillFriend :: ToxState -> Int -> IO (Maybe Friend)
-fillFriend tox num = do
+fillFriend :: ToxState -> Config -> Int -> IO (Maybe Friend)
+fillFriend tox cfg num = do
   name <- (liftM eitherToMaybe) $ toxFriendGetName tox (fromIntegral num)
   pk <- (liftM eitherToMaybe) $ toxFriendGetPublicKey tox (fromIntegral num)
   connStatus <- (liftM eitherToMaybe) $ toxFriendGetConnectionStatus tox (fromIntegral num)
   statusMessage <- (liftM eitherToMaybe) $ toxFriendGetStatusMessage tox (fromIntegral num)
-  return $ Friend <$> Just num <*> name <*> pk <*> connStatus <*> statusMessage
+  return $ Friend <$> Just num <*> name <*> pk <*> connStatus <*> statusMessage <*> (isMaster cfg <$> pk)
                 
 
 data Friend = Friend { friendNum :: Int
                      , friendName :: Name
                      , friendPk :: ToxPublicKey
                      , friendConnectionStatus :: Connection
-                     , friendStatusMessage :: StatusMessage }
+                     , friendStatusMessage :: StatusMessage
+                     , friendIsMaster :: Bool }
   deriving (Eq, Show, Read)
 
 
@@ -151,9 +168,9 @@ data Peer = Peer { peerNum :: Int
   deriving (Eq, Show, Read)
 
 
-type ToxAddress = ByteString
-type ToxPublicKey = ByteString
-type Cookie = ByteString
+type ToxAddress = BS.ByteString
+type ToxPublicKey = BS.ByteString
+type Cookie = BS.ByteString
 type Message = String
 type StatusMessage = String
 type Title = String
@@ -217,7 +234,8 @@ type ToxBot m = Auto m Event Commands
 
 type GroupBot m = Auto m GroupEvent GroupCommands
 
-data ToxBotRState = ToxBotRState { toxState :: ToxState }
+data ToxBotRState = ToxBotRState { toxState :: ToxState
+                                 , config :: Config }
 
 newtype ToxBotApp a = ToxBotA { runA :: ReaderT ToxBotRState IO a }
   deriving (Functor, Applicative, Monad, MonadIO, MonadReader ToxBotRState)
@@ -226,6 +244,8 @@ class (MonadReader ToxBotRState m, MonadIO m, Monad m, Applicative m) => MonadTB
   tb :: ToxBotApp a -> m a
   getTox :: m ToxState
   getTox = asks toxState
+  getConfig :: m Config
+  getConfig = asks config
 
 
 instance MonadTB ToxBotApp where tb = id
@@ -253,3 +273,40 @@ perGroup gb = proc evts -> do
       GroupCommands gcmds <- gbot -< evt
       let cmds = map (toCmd conf) gcmds
       id -< Commands cmds
+
+data BootstrapNode = BootstrapNode { bootstrapAddress :: String
+                                   , bootstrapPort :: Int
+                                   , bootstrapPublicKey :: String }
+                     deriving (Show, Generic)
+
+instance FromJSON BootstrapNode where
+  parseJSON (Object v) =
+    BootstrapNode <$>
+    v .: "bootstrap-address" <*>
+    v .: "bootstrap-port" <*>
+    v .: "bootstrap-public-key"
+  parseJSON _ = fail "Expected Object for BootstrapNode value"
+
+data Config = Config { botName :: Name
+                     , masterKeys :: [String]
+                     , bootstrapNodes :: [BootstrapNode]
+                     , toxSavedataFilename :: String }
+              deriving (Show, Generic)
+
+instance FromJSON Config where
+  parseJSON (Object v) =
+    Config <$>
+    v .: "bot-name" <*>
+    v .: "master-keys" <*>
+    v .: "bootstrap-nodes" <*>
+    v .: "tox-savedata-filename"
+  parseJSON _ = fail "Expected Object for Config value"
+
+readConfig :: IO (Maybe Config)
+readConfig = decodeFile "config.yaml"
+
+isMaster :: Config -> BS.ByteString -> Bool
+isMaster cfg key = elem key $ map toxKeyFromString (masterKeys cfg)
+
+toxKeyFromString :: String -> BS.ByteString
+toxKeyFromString = fst . Base16.decode . fromString

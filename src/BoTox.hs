@@ -5,18 +5,18 @@ module BoTox where
 import           BoTox.Commands
 import           BoTox.Types
 import           BoTox.Bots (bots)
-import qualified Data.BoTox.Config as Cfg
 
-import           Prelude hiding ((.), id)
-import           Control.Monad.Loops
 import           Control.Auto.Run
-import           Control.Exception
-import           Network.Tox.C
-import qualified Data.ByteString.Char8 as BS
-import qualified Data.ByteString.Base16 as Base16
-import           Control.Concurrent.MVar
 import           Control.Concurrent
+import           Control.Exception
+import           Control.Monad.Loops
 import           Control.Monad.Reader
+import qualified Data.ByteString.Base16 as Base16
+import qualified Data.ByteString.Char8 as BS
+import           Data.Maybe
+import           Network.Tox.C
+import           Prelude hiding ((.), id)
+import           System.Random
 
 toxOptions :: BS.ByteString -> Options
 toxOptions savedata = Options
@@ -49,33 +49,38 @@ readToxSavedata f = catch (BS.readFile f) handler
     handler :: IOException -> IO BS.ByteString
     handler _e = return BS.empty
 
-runTox :: Options -> ToxBot ToxBotApp -> IO ()
-runTox opts bot = must $ withOptions opts $
-  \optsPtr ->
+runTox :: ToxBot ToxBotApp -> IO ()
+runTox bot = do
+  maybeCfg <- readConfig
+  let cfg = fromMaybe (error "Cannot read config") maybeCfg
+  savedata <- readToxSavedata (toxSavedataFilename cfg)
+  must $ withOptions (toxOptions savedata) $ \optsPtr ->
     must $ withTox optsPtr $
     \tox -> withCHandler tox $ do
+      bootstrapNode <- liftM (bootstrapNodes cfg !! ) $ randomRIO (0, (length $ bootstrapNodes cfg) - 1)
       addr <- toxSelfGetAddress tox
       putStrLn $ BS.unpack $ Base16.encode addr
-      _ <- toxBootstrap tox Cfg.toxBootstrapAddress Cfg.toxBootstrapPort Cfg.toxBootstrapKey
-      _ <- toxSelfSetName tox Cfg.botName
-      savedata <- toxGetSavedata tox
-      BS.writeFile Cfg.toxSavedataFilename savedata
-      runToxBotApp (iterateM_ runBot bot) (ToxBotRState tox)
+      _ <- toxBootstrap tox (bootstrapAddress bootstrapNode) (fromIntegral $ bootstrapPort bootstrapNode) (toxKeyFromString $ bootstrapPublicKey bootstrapNode)
+      _ <- toxSelfSetName tox (botName cfg)
+      sd <- toxGetSavedata tox
+      BS.writeFile (toxSavedataFilename cfg) sd
+      runToxBotApp (iterateM_ runBot bot) (ToxBotRState tox cfg)
 
 
 runBot :: MonadTB m => ToxBot m -> m (ToxBot m)
 runBot bot = do
   tox <- getTox
-  ToxData events <- liftIO $ stepTox tox
+  cfg <- getConfig
+  ToxData events _ <- liftIO $ stepTox tox cfg
   (cmds, bot') <- overList bot events
   let Commands cmds' = mconcat cmds
-  liftIO $ mapM_ (runCommand tox) cmds'
+  liftIO $ mapM_ (runCommand tox cfg) cmds'
   return bot'
              
 
-stepTox :: Tox ToxData -> IO ToxData
-stepTox tox = do
-  td <- newMVar $ ToxData []
+stepTox :: Tox ToxData -> Config -> IO ToxData
+stepTox tox cfg = do
+  td <- newMVar $ ToxData [] cfg
   toxIterate tox td
   interval <- toxIterationInterval tox
   threadDelay $ fromIntegral $ interval * 10000
@@ -88,5 +93,4 @@ chatBot = mconcat bots
                      
 runBoTox :: IO ()
 runBoTox = do
-  savedata <- readToxSavedata Cfg.toxSavedataFilename
-  runTox (toxOptions savedata) chatBot
+  runTox chatBot

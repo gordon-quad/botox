@@ -1,19 +1,18 @@
 {-# LANGUAGE Arrows, FlexibleContexts #-}
 module BoTox.Utils where
 
-import           BoTox.Types
-import qualified Data.BoTox.Config as Cfg
+import BoTox.Types
 
-import           Control.Arrow
-import           Control.Auto hiding (many,option)
-import           Control.Auto.Blip
-import           Control.Monad.Reader
-import           Data.Maybe
-import           Data.Either.Extra
-import           Data.List
-import           Network.Tox.C
-import           Prelude hiding ((.), id)
-import           Text.Parsec
+import Control.Arrow
+import Control.Auto hiding (many,option)
+import Control.Auto.Blip
+import Control.Monad.Reader
+import Data.Either.Extra
+import Data.List
+import Data.Maybe
+import Network.Tox.C
+import Prelude hiding ((.), id)
+import Text.Parsec
 
 --
 -- Parsers
@@ -76,15 +75,13 @@ parseGroupBotCmd cmdPrefixes parseArgs = proc (_time, (EvtGroupMessage _ msg)) -
 masterEvents :: Auto m Event (Blip Event)
 masterEvents = emitOn checkIsMaster
   where
-    checkIsMaster (_, EvtFriendName f _)             = checkMasterFriend f
-    checkIsMaster (_, EvtFriendStatusMessage f _)    = checkMasterFriend f
-    checkIsMaster (_, EvtFriendStatus f _)           = checkMasterFriend f
-    checkIsMaster (_, EvtFriendConnectionStatus f _) = checkMasterFriend f
-    checkIsMaster (_, EvtFriendMessage f _ _)        = checkMasterFriend f
-    checkIsMaster (_, EvtConferenceInvite f _ _)     = checkMasterFriend f
+    checkIsMaster (_, EvtFriendName f _)             = friendIsMaster f
+    checkIsMaster (_, EvtFriendStatusMessage f _)    = friendIsMaster f
+    checkIsMaster (_, EvtFriendStatus f _)           = friendIsMaster f
+    checkIsMaster (_, EvtFriendConnectionStatus f _) = friendIsMaster f
+    checkIsMaster (_, EvtFriendMessage f _ _)        = friendIsMaster f
+    checkIsMaster (_, EvtConferenceInvite f _ _)     = friendIsMaster f
     checkIsMaster _                                  = False
-
-    checkMasterFriend (Friend { friendPk = pk }) = Cfg.isMaster pk
 
 ---
 --- Auxillary
