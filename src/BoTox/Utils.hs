@@ -73,26 +73,18 @@ parseGroupBotCmd cmdPrefixes parseArgs = proc (_time, (EvtGroupMessage _ msg)) -
 --
 -- Events filtering
 --
-masterEvents :: MonadTB m => Auto m Event (Blip Event)
-masterEvents = arrM checkIsMaster >>> onJusts
+masterEvents :: Auto m Event (Blip Event)
+masterEvents = emitOn checkIsMaster
   where
-    checkIsMaster evt@(_, EvtFriendName f _)             = checkMasterFriend f evt
-    checkIsMaster evt@(_, EvtFriendStatusMessage f _)    = checkMasterFriend f evt
-    checkIsMaster evt@(_, EvtFriendStatus f _)           = checkMasterFriend f evt
-    checkIsMaster evt@(_, EvtFriendConnectionStatus f _) = checkMasterFriend f evt
-    checkIsMaster evt@(_, EvtFriendMessage f _ _)        = checkMasterFriend f evt
-    checkIsMaster evt@(_, EvtConferenceInvite f _ _)     = checkMasterFriend f evt
-    checkIsMaster _                                      = return Nothing
+    checkIsMaster (_, EvtFriendName f _)             = checkMasterFriend f
+    checkIsMaster (_, EvtFriendStatusMessage f _)    = checkMasterFriend f
+    checkIsMaster (_, EvtFriendStatus f _)           = checkMasterFriend f
+    checkIsMaster (_, EvtFriendConnectionStatus f _) = checkMasterFriend f
+    checkIsMaster (_, EvtFriendMessage f _ _)        = checkMasterFriend f
+    checkIsMaster (_, EvtConferenceInvite f _ _)     = checkMasterFriend f
+    checkIsMaster _                                  = False
 
-    checkMasterFriend :: MonadTB m => Friend -> Event -> m (Maybe Event)
-    checkMasterFriend (Friend fn) evt = do
-      tox <- getTox
-      pk <- liftIO $ toxFriendGetPublicKey tox (fromIntegral fn)
-      case pk of
-        Left _ -> return Nothing
-        Right key -> return $ if Cfg.isMaster key
-                              then (Just evt)
-                              else Nothing
+    checkMasterFriend (Friend { friendPk = pk }) = Cfg.isMaster pk
 
 ---
 --- Auxillary
@@ -101,7 +93,7 @@ groupBotSay :: String -> GroupCommands
 groupBotSay s = GroupCommands [CmdGroupMessage MessageTypeNormal s]
 
 botFriendSay :: Friend -> String -> Commands
-botFriendSay f s = Commands [CmdFriendSendMessage f MessageTypeNormal s]
+botFriendSay f s = Commands [CmdFriendSendMessage (friendNum f) MessageTypeNormal s]
 
 botConferenceSay :: Conference -> String -> Commands
-botConferenceSay c s = Commands [CmdConferenceSendMessage c MessageTypeNormal s]
+botConferenceSay c s = Commands [CmdConferenceSendMessage (conferenceNum c) MessageTypeNormal s]
