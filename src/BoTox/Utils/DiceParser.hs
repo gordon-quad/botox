@@ -6,15 +6,15 @@ module BoTox.Utils.DiceParser ( Expr(..)
                               , evalDiceStr
                               , diceParser) where
 
+import BoTox.Utils
 import Control.Applicative ((<$>), (<*), (*>), (<|>))
 import Control.Monad (foldM, liftM2, liftM)
 import Control.Monad.State (State, get, put, runState, replicateM)
+import Data.List (intercalate)
 import System.Random (Random, StdGen, randomR)
-import Text.Parsec (many1, digit, char, parse, try, Stream(..), ParsecT, ParseError, eof)
+import Text.Parsec (many1, digit, char, parse, try, Stream(..), ParsecT, ParseError, eof, optionMaybe)
 import Text.Parsec.Char (oneOf, string)
 import Text.Parsec.Expr (Assoc(..), Operator(..), buildExpressionParser)
-import Data.List (intercalate)
-import BoTox.Utils
 
 -- Randomness setup for dice roll --
 
@@ -86,7 +86,7 @@ die = try (const (UDice 1) <$> string "dF") <|> (toDice <$> oneOf "du" <*> (many
 
 -- A parser to parse multiple dice
 dice :: Stream s m Char => ParsecT s u m Expr
-dice = (flip Rol . read) <$> spaced (many1 digit) <*> die
+dice = (flip Rol . maybe 1 read) <$> optionMaybe (many1 digit) <*> die
 
 -- A parse to parse a factor, where a factor is either a literal or
 -- a factor preceded by an unary operator or an expression enclosed in brackets
