@@ -23,6 +23,7 @@ library
                      , BoTox.Utils.DiceParser
                      , BoTox.Bots
                      , BoTox.Bots.GroupBot
+                     , BoTox.Bots.EchoBot
                      , BoTox.Bots.RollBot
                      , BoTox.Bots.TitleBot
 
