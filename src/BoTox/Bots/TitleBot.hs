@@ -12,6 +12,7 @@ import           Control.Lens
 import           Control.Monad.IO.Class (MonadIO, liftIO)
 import qualified Data.ByteString.Lazy.Char8 as LB
 import qualified Data.List as L
+import           Data.Maybe
 import qualified Data.String as S
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
@@ -68,19 +69,14 @@ extractTitle url = do
     Right webpage -> do
       let errorText    = "Webpage has no title."
           parsed       =  parseTags webpage
-          content      = getTagContent (S.fromString "title") null parsed
-          maybeResult  = case fmap maybeTagText content of
-                           (x:_) -> x
-                           []    -> Nothing
-      if  Prelude.foldr (||) False $ fmap (tagOpenNameLit "title") parsed
-      then case maybeResult of 
-             Just result ->  return . mapError . TE.decodeUtf8' $ LB.toStrict result -- To do: handle web pages that don't use UTF8
-             Nothing     -> return "Could not fetch a title for that URL."
-      else return errorText
+          titleTags    =  takeWhile (not . tagCloseNameLit "title") $ dropWhile (not . tagOpenNameLit "title") parsed
+          result       =  mconcat $ catMaybes $ map maybeTagText titleTags
+      case result of 
+        "" ->  return errorText
+        r ->  return . mapError . TE.decodeUtf8' $ LB.toStrict r -- To do: handle web pages that don't use UTF8
     Left ex -> return $ T.pack $ "Fetching page title failed due to " ++ ex
   where
-    mapError (Right title) = title
-    mapError (Left _)      = "2017 год на дворе блядь а эта обоссаная страничка не может в UTF8"
+    mapError = either (S.fromString . show) id
 
 
 getWebPage :: String -- | Url
