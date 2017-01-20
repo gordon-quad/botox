@@ -43,30 +43,37 @@ integer = read <$> many1 digit
 --
 -- Command processing
 --
-parseCmd :: Monad m => [String] -> ParsecT String () Identity a  -> Auto m (d, String) (Blip (d, Either ParseError a))
+raiseBlip :: Monad m => Auto m (a,b) (c, (Blip d)) -> Auto m (a, b) (Blip (c, d))
+raiseBlip ar = ar >>> arr (uncurry $ fmap . (,))
+
+
+parseCmd :: Monad m => [String] -> ParsecT String () Identity a -> Auto m String (Blip (Either ParseError a))
 parseCmd cmds parseArgs =  emitJusts processInput >>> modifyBlips parseCommand
   where
-    processInput :: (d, String) -> Maybe (d, String)
-    processInput (x, s) = eitherToMaybe $ parse (((,) x) <$> (choice (map (try . string) cmds) *> choice [try $ skipMany1 space, eof] *> leftOvers)) "CmdParser" s
-    parseCommand (x, s) = (x, parse (parseArgs <* eof) "CmdParser" s)
+    processInput :: String -> Maybe String
+    processInput s = eitherToMaybe $ parse ((choice (map (try . string) cmds) *> choice [try $ skipMany1 space, eof] *> leftOvers)) "CmdParser" s
+    parseCommand s = parse (parseArgs <* eof) "CmdParser" s
+
 
 parseGroupEventCmd :: Monad m => [String] -> ParsecT String () Identity a -> Auto m Event (Blip (Conference, Either ParseError a))
 parseGroupEventCmd cmdPrefixes parseArgs =
-  arr snd >>> emitJusts filterGroupMsgs >>> perBlip (parseCmd cmdPrefixes parseArgs) >>> joinB
+  arr snd >>> emitJusts filterGroupMsgs >>> perBlip (raiseBlip . second $ parseCmd cmdPrefixes parseArgs) >>> joinB
   where
     filterGroupMsgs (EvtConferenceMessage conf _ MessageTypeNormal msg) = Just (conf, msg)
     filterGroupMsgs _                                                   = Nothing
 
+
 parseFriendEventCmd :: Monad m => [String] -> ParsecT String () Identity a -> Auto m Event (Blip (Friend, Either ParseError a))
 parseFriendEventCmd cmdPrefixes parseArgs =
-  arr snd >>> emitJusts filterFriendMsgs >>> perBlip (parseCmd cmdPrefixes parseArgs) >>> joinB
+  arr snd >>> emitJusts filterFriendMsgs >>> perBlip (raiseBlip . second $ parseCmd cmdPrefixes parseArgs) >>> joinB
   where
     filterFriendMsgs (EvtFriendMessage friend MessageTypeNormal msg) = Just (friend, msg)
     filterFriendMsgs _                                               = Nothing
 
+
 parseGroupBotCmd :: Monad m => [String] -> ParsecT String () Identity a -> Auto m GroupEvent (Blip (Either ParseError a))
 parseGroupBotCmd cmdPrefixes parseArgs = proc (_time, (EvtGroupMessage _ msg)) -> do
-  modifyBlips snd . parseCmd cmdPrefixes parseArgs -< ((), msg)
+  parseCmd cmdPrefixes parseArgs -< msg
 
 
 --

@@ -63,8 +63,8 @@ data ToxData = ToxData [Event] Config
 
 zipMaybe :: (Maybe a, Maybe b) -> Maybe (a, b)
 zipMaybe (a, b) = (,) <$> a <*> b
-  
-  
+
+
 instance CHandler ToxData where
   cSelfConnectionStatus _tox conn (ToxData events cfg) = do
     time <- epochTime
@@ -108,7 +108,11 @@ instance CHandler ToxData where
     time <- epochTime
     conf <- fillConference tox (fromIntegral cn)
     peer <- fillPeer tox (fromIntegral cn) (fromIntegral pn)
-    return $ maybe td (\(c, p) -> ToxData ((time, EvtConferenceMessage c p msgType msg) : events) cfg) $ zipMaybe (conf,peer)
+    isSelf <- (liftM eitherToMaybe) $ toxConferencePeerNumberIsOurs tox (fromIntegral cn) (fromIntegral pn)
+    case isSelf of
+      Nothing -> return td
+      Just False -> return $ maybe td (\(c, p) -> ToxData ((time, EvtConferenceMessage c p msgType msg) : events) cfg) $ zipMaybe (conf,peer)
+      Just True -> return $ maybe td (\c -> ToxData ((time, EvtConferenceSelfMessage c msgType msg) : events) cfg) $ conf
   
   cConferenceTitle tox cn pn title td@(ToxData events cfg) = do
     time <- epochTime
@@ -187,6 +191,7 @@ data EventType = EvtSelfConnectionStatus      Connection
                | EvtFriendMessage             Friend MessageType Message
                | EvtConferenceInvite          Friend ConferenceType Cookie
                | EvtConferenceMessage         Conference Peer MessageType Message
+               | EvtConferenceSelfMessage     Conference MessageType Message
                | EvtConferenceTitle           Conference Peer Title
                | EvtConferenceNamelistChange  Conference [Peer]
   deriving (Eq, Show)
