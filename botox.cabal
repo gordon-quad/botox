@@ -40,7 +40,9 @@ library
                      , text
                      , tagsoup
                      , unix
-                     , wreq
+                     , conduit
+                     , conduit-extra
+                     , http-conduit
                      , mtl
                      , lens
                      , MissingH
@@ -51,6 +53,9 @@ library
                      , aeson
                      , yaml
                      , hslogger
+                     , http-types
+                     , iconv
+                     , regex-compat
 
   default-language:    Haskell2010
 
