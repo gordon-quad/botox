@@ -90,7 +90,8 @@ getWebPage url = do
   eResponse <- try (getUrl url) :: IO (Either HttpException (Maybe BS.ByteString, LB.ByteString))
   case eResponse of
     Right (contentType, response) -> return $ Right $ (contentType, response)
-    Left ex -> return $ Left $ "HTTP Exception: " ++ show ex
+    Left (HttpExceptionRequest _ ex) -> return $ Left $ "HTTP Exception: " ++ show ex
+    Left ex -> return $ Left $ "Exception: " ++ show ex
 
 getUrl :: String -> IO (Maybe BS.ByteString, LB.ByteString)
 getUrl url = do
@@ -105,5 +106,5 @@ matchCharset :: String -> String
 matchCharset t = maybe "UTF-8" head $ matchRegex (mkRegex "charset=([a-zA-Z0-9-]+)") t
 
 toCharset :: String -> LB.ByteString -> LB.ByteString
-toCharset enc title = IConv.convert enc "UTF-8" title
+toCharset enc title = IConv.convertFuzzy IConv.Discard enc "UTF-8" title
 
