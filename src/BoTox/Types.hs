@@ -56,6 +56,7 @@ import           Prelude hiding ((.), id)
 import           System.Log.Logger
 import           System.Posix.Time (epochTime)
 import           System.Posix.Types (EpochTime)
+import qualified Data.Semigroup as Sem
 
   
 data ToxData = ToxData [Event] Config
@@ -120,14 +121,14 @@ instance CHandler ToxData where
     peer <- fillPeer tox (fromIntegral cn) (fromIntegral pn)
     return $ maybe td (\(c, p) -> ToxData ((time, EvtConferenceTitle c p title) : events) cfg) $ zipMaybe (conf,peer)
   
-  cConferenceNamelistChange tox cn _pn _change td@(ToxData events cfg) = do
+  cConferencePeerListChanged tox cn td@(ToxData events cfg) = do
     time <- epochTime
     conf <- fillConference tox (fromIntegral cn)
     peerCount <- (liftM eitherToMaybe) $ toxConferencePeerCount tox (fromIntegral cn)
     peers <- case peerCount of
                Nothing -> return Nothing
                Just pc -> (liftM sequence) $ resolvePeers [1..(fromIntegral pc)]
-    return $ maybe td (\(c, p) -> ToxData ((time, EvtConferenceNamelistChange c p) : events) cfg) $ zipMaybe (conf,peers)
+    return $ maybe td (\(c, p) -> ToxData ((time, EvtConferencePeerListChanged c p) : events) cfg) $ zipMaybe (conf,peers)
     where
       resolvePeers = mapM (fillPeer tox (fromIntegral cn))
 
@@ -193,7 +194,7 @@ data EventType = EvtSelfConnectionStatus      Connection
                | EvtConferenceMessage         Conference Peer MessageType Message
                | EvtConferenceSelfMessage     Conference MessageType Message
                | EvtConferenceTitle           Conference Peer Title
-               | EvtConferenceNamelistChange  Conference [Peer]
+               | EvtConferencePeerListChanged Conference [Peer]
   deriving (Eq, Show)
 
 type Event = (EpochTime, EventType)
@@ -227,13 +228,19 @@ newtype GroupCommands = GroupCommands [GroupCommand] deriving Show
 
 type ToxState = Tox ToxData
 
+instance Sem.Semigroup Commands where
+  (Commands m1) <> (Commands m2) = Commands (m1 ++ m2)
+  
 instance Monoid Commands where
   mempty = Commands []
-  mappend (Commands m1) (Commands m2) = Commands (m1 ++ m2)
+  mappend = (<>)
     
+instance Sem.Semigroup GroupCommands where
+  (GroupCommands m1) <> (GroupCommands m2) = GroupCommands (m1 ++ m2)
+  
 instance Monoid GroupCommands where
   mempty = GroupCommands []
-  mappend (GroupCommands m1) (GroupCommands m2) = GroupCommands (m1 ++ m2)
+  mappend = (<>)
 
 
 type ToxBot m = Auto m Event Commands

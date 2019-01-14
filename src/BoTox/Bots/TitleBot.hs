@@ -96,7 +96,10 @@ getWebPage url = do
 getUrl :: String -> IO (Maybe BS.ByteString, LB.ByteString)
 getUrl url = do
   req <- parseRequest url
-  withResponse req (\resp -> liftM ((,) (listToMaybe $ getResponseHeader hContentType resp)) $ (getResponseBody resp $$ CB.take 10240))
+  withResponse req (\resp -> liftM ((,) (listToMaybe $ getResponseHeader hContentType resp)) $ (getResponseBody resp $$ CB.take cutPageSize))
+  where
+    cutPageSize = 1048576
+
 
 decodeCharset :: Maybe BS.ByteString -> String
 decodeCharset Nothing = "UTF-8"
@@ -106,5 +109,9 @@ matchCharset :: String -> String
 matchCharset t = maybe "UTF-8" head $ matchRegex (mkRegex "charset=([a-zA-Z0-9-]+)") t
 
 toCharset :: String -> LB.ByteString -> LB.ByteString
+toCharset "utf-8" title = title
+toCharset "utf8" title = title
+toCharset "UTF-8" title = title
+toCharset "UTF8" title = title
 toCharset enc title = IConv.convertFuzzy IConv.Discard enc "UTF-8" title
 
